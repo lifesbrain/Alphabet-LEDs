@@ -7,44 +7,45 @@ import os
 import utime
 import binascii
 
+class Sim868:
+    def __init__(self):
+        # using pin defined
+        self.led_pin = 25  # onboard led
+        self.pwr_en = 14  # pin to control the power of the module
+        self.uart_port = 0
+        self.uart_baute = 115200
 
-# using pin defined
-led_pin = 25  # onboard led
-pwr_en = 14  # pin to control the power of the module
-uart_port = 0
-uart_baute = 115200
+        self.APN = "CMNET"
 
-APN = "CMNET"
+        self.reading = 0
+        self.temperature = 0
 
-reading = 0
-temperature = 0
+        # uart setting
+        self.uart = machine.UART(self.uart_port, self.uart_baute)
+        print(os.uname())
 
-# uart setting
-uart = machine.UART(uart_port, uart_baute)
-print(os.uname())
+        # LED indicator on Raspberry Pi Pico
+        led_onboard = machine.Pin(self.led_pin, machine.Pin.OUT)
 
-# LED indicator on Raspberry Pi Pico
-led_onboard = machine.Pin(led_pin, machine.Pin.OUT)
+        # HTTP Get Post Parameter
+        http_get_server = ['http://api.seniverse.com', '/v3/weather/now.json?key=SwwwfskBjB6fHVRon&location=shenzhen&language=en&unit=c']
+        http_post_server = ['http://pico.wiki', '/post-data.php', 'api_key=tPmAT5Ab3j888']
+        http_post_tmp = 'api_key=tPmAT5Ab3j888&value1=26.44&value2=57.16&value3=1002.95'
+        http_content_type = 'application/x-www-form-urlencoded'
 
-# HTTP Get Post Parameter
-http_get_server = ['http://api.seniverse.com', '/v3/weather/now.json?key=SwwwfskBjB6fHVRon&location=shenzhen&language=en&unit=c']
-http_post_server = ['http://pico.wiki', '/post-data.php', 'api_key=tPmAT5Ab3j888']
-http_post_tmp = 'api_key=tPmAT5Ab3j888&value1=26.44&value2=57.16&value3=1002.95'
-http_content_type = 'application/x-www-form-urlencoded'
+        # MQTT Server info
+        mqtt_host = '47.89.22.46'
+        mqtt_port = '1883'
 
-# MQTT Server info
-mqtt_host = '47.89.22.46'
-mqtt_port = '1883'
+        mqtt_topic1 = 'testtopic'
+        mqtt_topic2 = 'testtopic/led'
+        mqtt_topic3 = 'testtopic/temp'
+        mqtt_topic4 = 'testtopic/adc'
+        mqtt_topic5 = 'testtopic/tempwarning'
+        mqtt_topic6 = 'testtopic/warning'
+        mqtt_topic7 = 'testtopic/gpsinfo'
 
-mqtt_topic1 = 'testtopic'
-mqtt_topic2 = 'testtopic/led'
-mqtt_topic3 = 'testtopic/temp'
-mqtt_topic4 = 'testtopic/adc'
-mqtt_topic5 = 'testtopic/tempwarning'
-mqtt_topic6 = 'testtopic/warning'
-mqtt_topic7 = 'testtopic/gpsinfo'
-
-mqtt_msg = 'on'
+        mqtt_msg = 'on'
 
 
 def led_blink():
@@ -59,7 +60,7 @@ def led_blink():
 
 # power on/off the module
 def power_on_off():
-    pwr_key = machine.Pin(pwr_en, machine.Pin.OUT)
+    pwr_key = machine.Pin(self.pwr_en, machine.Pin.OUT)
     pwr_key.value(1)
     utime.sleep(2)
     pwr_key.value(0)
@@ -80,8 +81,8 @@ def wait_resp_info(timeout=2000):
     prvmills = utime.ticks_ms()
     info = b""
     while (utime.ticks_ms()-prvmills) < timeout:
-        if uart.any():
-            info = b"".join([info, uart.read(1)])
+        if self.uart.any():
+            info = b"".join([info, self.uart.read(1)])
     print(info.decode())
     return info
 
@@ -89,11 +90,11 @@ def wait_resp_info(timeout=2000):
 # Send AT command
 def send_at(cmd, back, timeout=2000):
     rec_buff = b''
-    uart.write((cmd+'\r\n').encode())
+    self.uart.write((cmd+'\r\n').encode())
     prvmills = utime.ticks_ms()
     while (utime.ticks_ms()-prvmills) < timeout:
-        if uart.any():
-            rec_buff = b"".join([rec_buff, uart.read(1)])
+        if self.uart.any():
+            rec_buff = b"".join([rec_buff, self.uart.read(1)])
     if rec_buff != '':
         if back not in rec_buff.decode():
             print(cmd + ' back:\t' + rec_buff.decode())
@@ -108,11 +109,11 @@ def send_at(cmd, back, timeout=2000):
 # Send AT command and return response information
 def send_at_wait_resp(cmd, back, timeout=2000):
     rec_buff = b''
-    uart.write((cmd + '\r\n').encode())
+    self.uart.write((cmd + '\r\n').encode())
     prvmills = utime.ticks_ms()
     while (utime.ticks_ms() - prvmills) < timeout:
-        if uart.any():
-            rec_buff = b"".join([rec_buff, uart.read(1)])
+        if self.uart.any():
+            rec_buff = b"".join([rec_buff, self.uart.read(1)])
     if rec_buff != '':
         if back not in rec_buff.decode():
             print(cmd + ' back:\t' + rec_buff.decode())
@@ -128,9 +129,9 @@ def send_at_wait_resp(cmd, back, timeout=2000):
 def check_start():
     while True:
         # simcom module uart may be fool,so it is better to send much times when it starts.
-        uart.write(bytearray(b'ATE1\r\n'))
+        self.uart.write(bytearray(b'ATE1\r\n'))
         utime.sleep(2)
-        uart.write(bytearray(b'AT\r\n'))
+        self.uart.write(bytearray(b'AT\r\n'))
         rec_temp = wait_resp_info()
         if 'OK' in rec_temp.decode():
             print('SIM868 is ready\r\n' + rec_temp.decode())
@@ -157,7 +158,7 @@ def check_network():
     send_at("AT+CGATT?", "OK")
     send_at("AT+CGDCONT?", "OK")
     send_at("AT+CSTT?", "OK")
-    send_at("AT+CSTT=\""+APN+"\"", "OK")
+    send_at("AT+CSTT=\""+self.APN+"\"", "OK")
     send_at("AT+CIICR", "OK")
     send_at("AT+CIFSR", "OK")
 
@@ -169,7 +170,7 @@ def get_gps_info():
     send_at('AT+CGNSPWR=1', 'OK')
     utime.sleep(2)
     for i in range(1, 10):
-        uart.write(bytearray(b'AT+CGNSINF\r\n'))
+        self.uart.write(bytearray(b'AT+CGNSINF\r\n'))
         rec_buff = wait_resp_info()
         if ',,,,' in rec_buff.decode():
             print('GPS is not ready')
@@ -193,7 +194,7 @@ def get_gps_info():
 # Bearer Configure
 def bearer_config():
     send_at('AT+SAPBR=3,1,\"Contype\",\"GPRS\"', 'OK')
-    send_at('AT+SAPBR=3,1,\"APN\",\"'+APN+'\"', 'OK')
+    send_at('AT+SAPBR=3,1,\"self.APN\",\"'+self.APN+'\"', 'OK')
     send_at('AT+SAPBR=1,1', 'OK')
     send_at('AT+SAPBR=2,1', 'OK')
 #   send_at('AT+SAPBR=0,1', 'OK')
@@ -205,7 +206,7 @@ def http_get():
     send_at('AT+HTTPPARA=\"CID\",1', 'OK')
     send_at('AT+HTTPPARA=\"URL\",\"'+http_get_server[0]+http_get_server[1]+'\"', 'OK')
     if send_at('AT+HTTPACTION=0', '200', 5000):
-        uart.write(bytearray(b'AT+HTTPREAD\r\n'))
+        self.uart.write(bytearray(b'AT+HTTPREAD\r\n'))
         rec_buff = wait_resp_info(8000)
         print("resp is :", rec_buff.decode())
     else:
@@ -220,7 +221,7 @@ def http_post():
     send_at('AT+HTTPPARA=\"URL\",\"'+http_post_server[0]+http_post_server[1]+'\"', 'OK')
     send_at('AT+HTTPPARA=\"CONTENT\",\"' + http_content_type + '\"', 'OK')
     if send_at('AT+HTTPDATA=62,8000', 'DOWNLOAD', 3000):
-        uart.write(bytearray(http_post_tmp))
+        self.uart.write(bytearray(http_post_tmp))
         utime.sleep(5)
         rec_buff = wait_resp_info()
         if 'OK' in rec_buff.decode():
@@ -246,8 +247,8 @@ def phone_call(phone_num='10000', keep_time=10):
 def sms_test(phone_num='10000', sms_info=""):
     send_at('AT+CMGF=1:', 'OK')
     if send_at('AT+CMGS=\"'+phone_num+'\"', '>'):
-        uart.write(bytearray(sms_info))
-        uart.write(bytearray(hexstr_to_str("1A")))
+        self.uart.write(bytearray(sms_info))
+        self.uart.write(bytearray(hexstr_to_str("1A")))
 
 
 # Bluetooth scan
